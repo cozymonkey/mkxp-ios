@@ -87,6 +87,7 @@ initALCFunctions(ALCdevice *alcDev)
 #define HAVE_ALC_DEVICE_PAUSE alc.DevicePause
 
 uint8_t EventThread::keyStates[];
+uint8_t EventThread::keyStatesLatch[];
 EventThread::ControllerState EventThread::controllerState;
 EventThread::MouseState EventThread::mouseState;
 EventThread::TouchState EventThread::touchState;
@@ -411,8 +412,9 @@ void EventThread::process(RGSSThreadData &rtData)
                 }
                 
                 keyStates[event.key.keysym.scancode] = true;
+                keyStatesLatch[event.key.keysym.scancode] = true;
                 break;
-                
+
             case SDL_KEYUP :
                 if (event.key.keysym.scancode == SDL_SCANCODE_F12)
                 {

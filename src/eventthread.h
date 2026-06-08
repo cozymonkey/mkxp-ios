@@ -72,6 +72,11 @@ public:
 	};
 
 	static uint8_t keyStates[SDL_NUM_SCANCODES];
+	/* A momentary key (e.g. an iOS soft-keyboard backspace) can go down and up
+	 * within a single game frame, which the per-frame input poll would miss.
+	 * KEYDOWN latches here; Input's per-frame poll ORs it in and clears it, so
+	 * the press is seen for one frame. */
+	static uint8_t keyStatesLatch[SDL_NUM_SCANCODES];
     static ControllerState controllerState;
 	static MouseState mouseState;
 	static TouchState touchState;

@@ -32,6 +32,10 @@
 #include <SDL_mouse.h>
 #include <SDL_clipboard.h>
 
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#endif
+
 #include <vector>
 #include <cmath>
 #include <unordered_map>
@@ -1054,9 +1058,19 @@ struct InputPrivate
     
     void updateRaw()
     {
-        
+
         memcpy(rawStates, shState->eThread().keyStates, SDL_NUM_SCANCODES);
-        
+
+#if defined(__APPLE__) && TARGET_OS_IPHONE
+        /* Fold in momentary keys (iOS soft-keyboard backspace etc.) that went
+         * down and up between polls, then clear the latch. */
+        {
+            uint8_t *latch = EventThread::keyStatesLatch;
+            for (int i = 0; i < SDL_NUM_SCANCODES; i++)
+                if (latch[i]) { rawStates[i] = 1; latch[i] = 0; }
+        }
+#endif
+
         for (int i = 0; i < SDL_NUM_SCANCODES; i++)
         {
             if (rawStates[i] && rawStatesOld[i])
