@@ -1,24 +1,36 @@
-TARGETFLAGS := $(TARGETFLAGS) -mmacosx-version-min=$(MINIMUM_REQUIRED)
-DEPLOYMENT_TARGET_ENV := MACOSX_DEPLOYMENT_TARGET=$(MINIMUM_REQUIRED)
-BUILD_PREFIX := ${PWD}/build-macosx-$(ARCH)
+# Platform knobs. Defaults preserve the original macOS behavior; iOS make files
+# override these before `include common.make` (see ios-arm64.make).
+PLATFORM ?= macosx
+SYSROOT ?=
+VERSION_MIN_FLAG ?= -mmacosx-version-min=$(MINIMUM_REQUIRED)
+DEPLOYMENT_TARGET_ENV ?= MACOSX_DEPLOYMENT_TARGET=$(MINIMUM_REQUIRED)
+
+TARGETFLAGS := $(TARGETFLAGS) $(VERSION_MIN_FLAG)
+BUILD_PREFIX := ${PWD}/build-$(PLATFORM)-$(ARCH)
 LIBDIR := $(BUILD_PREFIX)/lib
 INCLUDEDIR := $(BUILD_PREFIX)/include
-DOWNLOADS := ${PWD}/downloads/$(HOST)
+# Keep download/build trees per-platform so an iOS build can't clobber a macOS one
+# (both share HOST=aarch64-apple-darwin, so key the cache on PLATFORM+ARCH instead).
+DOWNLOADS ?= ${PWD}/downloads/$(PLATFORM)-$(ARCH)
 NPROC := $(shell sysctl -n hw.ncpu)
 # Explicitly including freetype2 dir for now. macOS is having weird issues with ft2build.h
 CFLAGS := -I$(INCLUDEDIR) -I$(INCLUDEDIR)/freetype2 $(TARGETFLAGS) $(DEFINES) -O3
 LDFLAGS := -L$(LIBDIR)
-CC      := clang -arch $(ARCH)
+CC      := clang -arch $(ARCH) $(if $(strip $(SYSROOT)),-isysroot $(SYSROOT),)
 PKG_CONFIG_LIBDIR := $(BUILD_PREFIX)/lib/pkgconfig
 GIT := git
 CLONE := $(GIT) clone -q
 GITHUB := https://github.com
 
-# need to set the build variable because Ruby is picky
+# need to set the build variable because Ruby is picky.
+# iOS make files override RBUILD to a triple that differs from --host, so autoconf
+# treats the Ruby build as a cross-compile and skips run-time (AC_RUN) probes.
+ifndef RBUILD
 ifeq "$(strip $(shell uname -m))" "arm64"
 RBUILD := aarch64-apple-darwin
 else
 RBUILD := x86_64-apple-darwin
+endif
 endif
 
 
@@ -44,10 +56,24 @@ CMAKE_ARGS := \
 # Ruby won't think it's cross-compiling unless
 # the BUILD variable is set now for whatever reason,
 # but 
+# Ruby output/link knobs. Defaults preserve macOS (shared dylib); iOS overrides
+# these to produce a static archive and to drop ext that can't run on iOS.
+RUBY_SHARED_FLAG ?= --enable-shared
+RUBY_OUT_EXT ?= fiddle,gdbm,win32ole,win32
+RUBY_LIB ?= libruby.3.1.dylib
+RUBY_POSTINSTALL ?= install_name_tool -id @rpath/libruby.3.1.dylib $(LIBDIR)/libruby.3.1.dylib
+# Extra env exported in front of Ruby's ./configure (e.g. cross_compiling=yes for iOS).
+RUBY_CONFIGURE_ENV_EXTRA ?=
+# Source patch applied once after cloning Ruby (iOS-only fixups). No-op on macOS.
+RUBY_PATCH ?= :
+# Extra args appended to Ruby's `make` / `make install` (e.g. BUNDLED_GEMS= to skip
+# bundled-gem C extensions that can't cross-link for iOS).
+RUBY_MAKE_ARGS ?=
+
 RUBY_CONFIGURE_ARGS := \
 	--enable-install-static-library \
-	--enable-shared \
-	--with-out-ext=fiddle,gdbm,win32ole,win32 \
+	$(RUBY_SHARED_FLAG) \
+	--with-out-ext=$(RUBY_OUT_EXT) \
 	--with-static-linked-ext \
 	--disable-rubygems \
 	--disable-install-doc \
@@ -300,12 +326,12 @@ $(DOWNLOADS)/openssl/Configure:
 	$(CLONE) $(GITHUB)/openssl/openssl $(DOWNLOADS)/openssl --single-branch --branch openssl-3.0.12 --depth 1
 
 # Standard ruby
-ruby: init_dirs openssl $(LIBDIR)/libruby.3.1.dylib
+ruby: init_dirs openssl $(LIBDIR)/$(RUBY_LIB)
 
-$(LIBDIR)/libruby.3.1.dylib: $(DOWNLOADS)/ruby/Makefile
+$(LIBDIR)/$(RUBY_LIB): $(DOWNLOADS)/ruby/Makefile
 	cd $(DOWNLOADS)/ruby; \
-	$(CONFIGURE_ENV) make -j$(NPROC); $(CONFIGURE_ENV) make install
-	install_name_tool -id @rpath/libruby.3.1.dylib $(LIBDIR)/libruby.3.1.dylib
+	$(CONFIGURE_ENV) make -j$(NPROC) $(RUBY_MAKE_ARGS); $(CONFIGURE_ENV) make install $(RUBY_MAKE_ARGS)
+	$(RUBY_POSTINSTALL)
 
 # -std=gnu99 is needed with GCC 15 and higher (which default to gnu23), for Ruby versions that aren't valid C23.
 # Ruby versions that are valid C23 are 3.2.9+, 3.3.9+, 3.4.5+, and 3.5.0+.
@@ -314,7 +340,7 @@ $(DOWNLOADS)/ruby/Makefile: $(DOWNLOADS)/ruby/configure
 	export $(CONFIGURE_ENV); \
 	export CFLAGS="-std=gnu99 -flto=full -DRUBY_FUNCTION_NAME_STRING=__func__ $$CFLAGS"; \
 	export LDFLAGS="-flto=full $$LDFLAGS"; \
-	./configure $(CONFIGURE_ARGS) $(RUBY_CONFIGURE_ARGS) $(RUBY_FLAGS)
+	$(RUBY_CONFIGURE_ENV_EXTRA) ./configure $(CONFIGURE_ARGS) $(RUBY_CONFIGURE_ARGS) $(RUBY_FLAGS)
 
 $(DOWNLOADS)/ruby/configure: $(DOWNLOADS)/ruby/configure.ac
 	cd $(DOWNLOADS)/ruby; autoreconf -i
@@ -322,6 +348,7 @@ $(DOWNLOADS)/ruby/configure: $(DOWNLOADS)/ruby/configure.ac
 $(DOWNLOADS)/ruby/configure.ac:
 	$(CLONE) $(GITHUB)/mkxp-z/ruby $(DOWNLOADS)/ruby --single-branch -b mkxp-z-3.1.3 --depth 1;
 	sed -i '' '/: $${PRELOADENV=DYLD_INSERT_LIBRARIES}/g' $(DOWNLOADS)/ruby/configure.ac
+	$(RUBY_PATCH)
 
 # ====
 init_dirs:
@@ -332,10 +359,10 @@ clean: clean-compiled
 powerwash: clean-compiled clean-downloads
 
 clean-downloads:
-	-rm -rf downloads/$(HOST)
+	-rm -rf $(DOWNLOADS)
 
 clean-compiled:
-	-rm -rf build-macosx-$(ARCH)
+	-rm -rf build-$(PLATFORM)-$(ARCH)
 
 deps-core: libtheora libvorbis pixman libpng physfs uchardet sdl2 sdl2image sdlsound sdl2ttf openal openssl
 everything: deps-core ruby
