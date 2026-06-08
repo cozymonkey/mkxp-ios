@@ -109,6 +109,10 @@ ios.build_configurations.each do |cfg|
   bs['PRODUCT_NAME']                  = '$(TARGET_NAME)'
   bs['CODE_SIGN_ENTITLEMENTS']        = 'mkxp.iOS.entitlements'
   bs['CODE_SIGN_STYLE']               = 'Automatic'
+  # Override the project's macOS ad-hoc identity ("-"); iOS device installs need a
+  # real cert. With Automatic signing + a team, Xcode resolves this to your cert.
+  bs['CODE_SIGN_IDENTITY']            = 'Apple Development'
+  bs.delete('PROVISIONING_PROFILE_SPECIFIER')
   bs['CLANG_ENABLE_OBJC_ARC']         = 'YES'
   bs['CLANG_CXX_LANGUAGE_STANDARD']   = 'c++14'
   bs['OTHER_CFLAGS']                  = '-fdeclspec'

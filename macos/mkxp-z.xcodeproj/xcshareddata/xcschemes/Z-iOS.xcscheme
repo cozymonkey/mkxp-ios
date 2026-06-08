@@ -14,7 +14,7 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "29CCFF04B7E29E1FF9287D28"
+               BlueprintIdentifier = "2AAAFBBBB1B58ED001B38FB1"
                BuildableName = "Z-iOS.app"
                BlueprintName = "Z-iOS"
                ReferencedContainer = "container:mkxp-z.xcodeproj">
@@ -30,7 +30,7 @@
       <MacroExpansion>
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "29CCFF04B7E29E1FF9287D28"
+            BlueprintIdentifier = "2AAAFBBBB1B58ED001B38FB1"
             BuildableName = "Z-iOS.app"
             BlueprintName = "Z-iOS"
             ReferencedContainer = "container:mkxp-z.xcodeproj">
@@ -53,7 +53,7 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "29CCFF04B7E29E1FF9287D28"
+            BlueprintIdentifier = "2AAAFBBBB1B58ED001B38FB1"
             BuildableName = "Z-iOS.app"
             BlueprintName = "Z-iOS"
             ReferencedContainer = "container:mkxp-z.xcodeproj">
@@ -70,7 +70,7 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "29CCFF04B7E29E1FF9287D28"
+            BlueprintIdentifier = "2AAAFBBBB1B58ED001B38FB1"
             BuildableName = "Z-iOS.app"
             BlueprintName = "Z-iOS"
             ReferencedContainer = "container:mkxp-z.xcodeproj">
