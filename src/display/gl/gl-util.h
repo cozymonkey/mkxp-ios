@@ -140,7 +140,12 @@ namespace FBO
 
 	static inline void unbind()
 	{
+#if defined(__APPLE__) && TARGET_OS_IPHONE
+		/* The on-screen framebuffer is SDL's window FBO, not 0. */
+		bind(ID(mkxpWindowFramebuffer));
+#else
 		bind(ID(0));
+#endif
 	}
 
 	static inline void setTarget(TEX::ID target, unsigned colorAttach = 0)

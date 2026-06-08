@@ -28,6 +28,7 @@
 #include <string>
 
 GLFunctions gl;
+GLuint mkxpWindowFramebuffer = 0;
 
 typedef const GLubyte* (APIENTRYP _PFNGLGETSTRINGIPROC) (GLenum, GLuint);
 

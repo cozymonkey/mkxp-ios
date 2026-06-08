@@ -29,6 +29,10 @@
 #include <SDL_opengl.h>
 #endif
 
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#endif
+
 /* Etc */
 typedef GLenum (APIENTRYP _PFNGLGETERRORPROC) (void);
 typedef void (APIENTRYP _PFNGLCLEARCOLORPROC) (GLclampf red, GLclampf green, GLclampf blue, GLclampf alpha);
@@ -234,5 +238,13 @@ struct GLFunctions
 
 extern GLFunctions gl;
 void initGLFunctions();
+
+/* iOS: SDL's window framebuffer is not 0; captured once after the GL context is
+ * made current and used as the on-screen target by FBO::unbind (gl-util.h).
+ * Stays 0 on every other platform. */
+extern GLuint mkxpWindowFramebuffer;
+#ifndef GL_FRAMEBUFFER_BINDING
+#define GL_FRAMEBUFFER_BINDING 0x8CA6
+#endif
 
 #endif // GLFUN_H

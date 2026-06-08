@@ -286,7 +286,12 @@ void blitBeginScreen(const Vec2i &size, int scaleIsSpecial)
 	blitDstHeightLores = 1;
 	blitDstHeightHires = 1;
 
+#if defined(__APPLE__) && TARGET_OS_IPHONE
+	/* The on-screen framebuffer is SDL's window FBO, not 0, on iOS. */
+	_blitBegin(FBO::ID(mkxpWindowFramebuffer), size, scaleIsSpecial);
+#else
 	_blitBegin(FBO::ID(0), size, scaleIsSpecial);
+#endif
 }
 
 void blitSource(TEXFBO &source, int scaleIsSpecial)

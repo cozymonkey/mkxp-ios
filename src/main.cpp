@@ -142,6 +142,16 @@ int rgssThreadFun(void *userdata) {
   SDL_GL_MakeCurrent(threadData->window, threadData->glContext);
 #endif
 
+#if defined(MKXPZ_BUILD_XCODE) && TARGET_OS_IPHONE
+  /* SDL bound its window framebuffer when making the context current; capture it
+   * so FBO::unbind() targets the on-screen FBO (it isn't 0 on iOS). */
+  {
+    GLint fbo = 0;
+    gl.GetIntegerv(GL_FRAMEBUFFER_BINDING, &fbo);
+    mkxpWindowFramebuffer = (GLuint)fbo;
+  }
+#endif
+
   /* Setup AL context */
   static const ALCint attrs[] = {
     /* HRTF is explicitly disabled here because it results in poor-quality audio
