@@ -1,0 +1,17 @@
+//
+//  mkxp.iOS.xcconfig
+//
+//  iOS arm64 device build. Mirrors mkxp.Intel.xcconfig's SDK_ROOT/BUILD_ARCH
+//  pattern so DEPENDENCY_SEARCH_PATH (mkxp.xcconfig) resolves to
+//  Dependencies/build-iphoneos-arm64, where the phase-1 iOS libs live.
+//
+
+// -----------------------------
+// Don't change any of this
+// -----------------------------
+SDK_ROOT = iphoneos
+BUILD_ARCH = arm64
+IPHONEOS_DEPLOYMENT_TARGET = 14.0
+
+// Configuration settings file format documentation can be found at:
+// https://help.apple.com/xcode/#/dev745c5c974

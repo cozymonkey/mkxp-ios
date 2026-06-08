@@ -4,6 +4,10 @@
 #include <SDL.h>
 #include <cstdint>
 
+#ifdef __APPLE__
+#include <TargetConditionals.h>
+#endif
+
 #include "filesystem/filesystem.h"
 #include "miniffi.h"
 #include "binding-util.h"
@@ -51,6 +55,14 @@ RB_METHOD_GUARD(MiniFFI_initialize) {
     rb_scan_args(argc, argv, "22", &libname, &func, &imports, &exports);
     SafeStringValue(libname);
     SafeStringValue(func);
+#if TARGET_OS_IPHONE
+    /* iOS has no Windows DLLs and can't dlopen arbitrary system libs. Build an
+     * inert stub: don't load anything and don't raise, so Pokémon Essentials'
+     * Win32API.new(...) succeeds and the later .call(...) returns 0/nil instead
+     * of crashing at script load. */
+    setPrivateData(self, 0);
+    rb_iv_set(self, "_func", MVAL2RB((mffi_value)0));
+#else
 #ifdef __APPLE__
     void *hlib = SDL_LoadObject(mkxp_fs::normalizePath(RSTRING_PTR(libname), 1, 1).c_str());
 #else
@@ -67,8 +79,9 @@ RB_METHOD_GUARD(MiniFFI_initialize) {
 #endif
     if (!hfunc)
         throw Exception(Exception::RuntimeError, "%s", SDL_GetError());
-    
+
     rb_iv_set(self, "_func", MVAL2RB((mffi_value)hfunc));
+#endif
     rb_iv_set(self, "_funcname", func);
     rb_iv_set(self, "_libname", libname);
     
@@ -197,6 +210,22 @@ void* miniffi_call_cb(void *args) {
 #endif
 
 RB_METHOD_GUARD(MiniFFI_call) {
+#if TARGET_OS_IPHONE
+    /* Inert stub (see MiniFFI_initialize): return a harmless zero/empty value
+     * matching the declared export type. */
+    VALUE own_exports = rb_iv_get(self, "_exports");
+    switch (FIX2INT(own_exports)) {
+        case _T_POINTER:
+            return rb_utf8_str_new_cstr("");
+        case _T_BOOL:
+            return rb_bool_new(0);
+        case _T_NUMBER:
+        case _T_INTEGER:
+        case _T_VOID:
+        default:
+            return MVAL2RB(0);
+    }
+#else
     MiniFFIFuncArgs param;
 #define params param.params
     VALUE func = rb_iv_get(self, "_func");
@@ -256,14 +285,15 @@ RB_METHOD_GUARD(MiniFFI_call) {
             
         case _T_POINTER:
             return rb_utf8_str_new_cstr((char *)ret);
-            
+
         case _T_BOOL:
             return rb_bool_new(ret);
-            
+
         case _T_VOID:
         default:
             return MVAL2RB(0);
     }
+#endif
 }
 RB_METHOD_GUARD_END
 

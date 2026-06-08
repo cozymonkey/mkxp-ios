@@ -69,10 +69,19 @@ __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
 
 #ifdef MKXPZ_BUILD_XCODE
 #include <Availability.h>
+#include <TargetConditionals.h>
+#if !TARGET_OS_IPHONE
 #include "TouchBar.h"
+#endif
 #if !defined(__MAC_10_15) || __MAC_OS_X_VERSION_MAX_ALLOWED < __MAC_10_15
 #define MKXPZ_INIT_GL_LATER
 #endif
+#endif
+
+#if defined(MKXPZ_BUILD_XCODE) && TARGET_OS_IPHONE
+/* iOS-only bridges (audiosession-ios.mm, TouchControls.mm) */
+extern "C" void mkxp_ios_initAudioSession(void);
+extern "C" void mkxp_ios_initTouchControls(SDL_Window *win);
 #endif
 
 #ifndef MKXPZ_INIT_GL_LATER
@@ -349,7 +358,9 @@ int main(int argc, char *argv[]) {
 
     // LoadLibrary properly initializes EGL, it won't work otherwise.
     // Doesn't completely do it though, needs a small patch to SDL
-#ifdef MKXPZ_BUILD_XCODE
+#if defined(MKXPZ_BUILD_XCODE) && !TARGET_OS_IPHONE
+    // macOS uses ANGLE (GLES->Metal). iOS has native OpenGLES via SDL's EAGL
+    // backend, so no EGL/ANGLE library is loaded.
     SDL_setenv("ANGLE_DEFAULT_PLATFORM", (conf.preferMetalRenderer) ? "metal" : "opengl", true);
     SDL_GL_LoadLibrary("@rpath/libEGL.dylib");
 #endif
@@ -368,10 +379,10 @@ int main(int argc, char *argv[]) {
       return 0;
     }
     
-#ifdef MKXPZ_BUILD_XCODE
+#if defined(MKXPZ_BUILD_XCODE) && !TARGET_OS_IPHONE
     {
         std::string downloadsPath = "/Users/" + mkxp_sys::getUserName() + "/Downloads";
-        
+
         if (mkxp_fs::getCurrentDirectory().find(downloadsPath) == 0) {
             showInitError(conf.game.title +
                           " cannot run from the Downloads directory.\n\n" +
@@ -385,7 +396,7 @@ int main(int argc, char *argv[]) {
     }
 #endif
     
-#if defined(MKXPZ_BUILD_XCODE)
+#if defined(MKXPZ_BUILD_XCODE) && !TARGET_OS_IPHONE
 #define DEBUG_FSELECT_MSG "Select the folder from which to load game files. This is the folder containing the game's INI."
 #define DEBUG_FSELECT_PROMPT "Load Game"
     if (conf.manualFolderSelect) {
@@ -406,6 +417,12 @@ int main(int argc, char *argv[]) {
     setupWindowIcon(conf, win);
 #else
     (void)setupWindowIcon;
+#endif
+
+#if defined(MKXPZ_BUILD_XCODE) && TARGET_OS_IPHONE
+    /* OpenAL-soft on iOS routes through CoreAudio; configure the audio session
+     * before opening the device. */
+    mkxp_ios_initAudioSession();
 #endif
 
     ALCdevice *alcDev = alcOpenDevice(0);
@@ -451,9 +468,12 @@ int main(int argc, char *argv[]) {
     /* Load and post key bindings */
     rtData.bindingUpdateMsg.post(loadBindings(conf));
     
-#ifdef MKXPZ_BUILD_XCODE
+#if defined(MKXPZ_BUILD_XCODE) && !TARGET_OS_IPHONE
     // Create Touch Bar
     initTouchBar(win, conf);
+#elif defined(MKXPZ_BUILD_XCODE) && TARGET_OS_IPHONE
+    // On-screen D-pad + A/B overlay
+    mkxp_ios_initTouchControls(win);
 #endif
 
     /* Start RGSS thread */

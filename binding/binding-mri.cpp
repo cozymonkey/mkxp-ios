@@ -645,6 +645,7 @@ RB_METHOD_GUARD(mkxpStringToUTF8Bang) {
 RB_METHOD_GUARD_END
 
 #ifdef __APPLE__
+#include <TargetConditionals.h>
 #define OPENCMD "open "
 #define OPENARGS "--args"
 #elif defined(__linux__)
@@ -687,10 +688,15 @@ RB_METHOD_GUARD(mkxpLaunch) {
 #endif
     }
     
+#if defined(__APPLE__) && TARGET_OS_IPHONE
+    /* system() is unavailable on iOS; external launch is a no-op. */
+    (void)command;
+#else
     if (std::system(command.c_str()) != 0) {
         throw Exception(Exception::MKXPError, "Failed to launch \"%s\"", RSTRING_PTR(cmdname));
     }
-    
+#endif
+
     return RUBY_Qnil;
 }
 RB_METHOD_GUARD_END

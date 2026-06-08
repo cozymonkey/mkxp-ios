@@ -42,7 +42,10 @@
 #else
 #include "system/system.h"
 #include "filesystem/filesystem.h"
+#include <TargetConditionals.h>
+#if !TARGET_OS_IPHONE
 #include "TouchBar.h"
+#endif
 #endif
 
 #include "al-util.h"
@@ -835,7 +838,9 @@ void EventThread::notifyFrame()
 {
 #ifdef MKXPZ_BUILD_XCODE
     uint32_t frames = round(shState->graphics().averageFrameRate());
+#if !TARGET_OS_IPHONE
     updateTouchBarFPSDisplay(frames);
+#endif
 #endif
     if (!fps.sendUpdates)
         return;
