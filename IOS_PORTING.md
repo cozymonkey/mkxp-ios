@@ -131,8 +131,16 @@ fluidsynth 체인을 코드화한 뒤 실제 빌드를 시도하다 **결정적 
   -f ios-arm64.make` 한 줄로 돌리면 된다.** 거기서 wrap libffi의 CFI 이슈가 재현되면 아래
   메모대로 대응.
 
-> 함의: 향후 어떤 빌드든 "빌드 중 네이티브 헬퍼 실행"이 필요하면 이 에이전트에선 막힌다.
+> 함의: 향후 어떤 빌드든 "빌드 중 네이티브 헬퍼 실행"이 필요하면 이 머신에선 막힌다.
 > 크로스컴파일(실행 안 함) 위주의 작업만 여기서 끝까지 가능.
+
+**근본 원인 (2026-06-08 확정)**: Claude Code 샌드박스가 아니라 **머신 자체**다. 순정
+Terminal.app에서도 trivial `int main(){return 0;}`가 실행 즉시 멈춤. `systemextensionsctl list`로
+범인 확인: **`com.nprotect.nosfw` (nProtect / 잉카인터넷, 한국 기업/금융 맥 보안 에이전트)** 의
+endpoint system extension이 새 실행파일의 exec을 가로채 hang. 회사 관리 정책이라 임의로 못 끄는
+경우가 많음. → fluidsynth/glib 같은 "빌드 중 네이티브 헬퍼 실행" 빌드는 nProtect 없는 머신
+(개인 맥/CI/클라우드 맥)에서 수행해야 함. 크로스컴파일 deps(Ruby/deps-core)·Xcode iOS 앱 빌드는
+영향 없음(타겟 바이너리는 iPhone/시뮬레이터에서 실행).
 
 ## 3. fluidsynth (iOS arm64) — ✅ 코드화 완료 / ⏸ 실제 빌드는 일반 환경에서
 
