@@ -42,6 +42,7 @@
 
 #ifdef __APPLE__
 #include <iconv.h>
+#include <TargetConditionals.h>
 #endif
 
 #ifdef __WIN32__
@@ -430,7 +431,13 @@ static PHYSFS_EnumerateCallbackResult cacheEnumCB(void *d, const char *origdir,
      * traversing and append this filename to it */
     std::vector<std::string> &list = *data.fileLists.top();
 
-    std::string lowerFilename(fname);
+    /* Use the filename from the (already NFC-normalized) fullPath, NOT the raw
+     * fname: on Apple, fname comes back NFD, which would make the directory file
+     * list NFD while the pathCache keys are NFC. That mismatch makes openRead
+     * match an entry but then fail to translate it, opening the wrong file. */
+    size_t slashPos = mixedCase.find_last_of('/');
+    std::string lowerFilename = (slashPos == std::string::npos)
+                                  ? mixedCase : mixedCase.substr(slashPos + 1);
     strTolower(lowerFilename);
     list.push_back(lowerFilename);
 

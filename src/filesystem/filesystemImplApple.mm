@@ -63,10 +63,15 @@ std::string filesystemImpl::normalizePath(const char *path, bool preferred, bool
          * and an absolute path leaks out that PhysFS can't match. For a relative
          * input we just clean the separators and keep it relative. */
         if (!absolute && path[0] != '/') {
-            NSString *p = [PATHTONS(path) stringByReplacingOccurrencesOfString:@"\\" withString:@"/"];
-            while ([p hasPrefix:@"./"])
-                p = [p substringFromIndex:2];
-            return std::string(NSTOPATH(p));
+            /* Pure byte-level cleanup — do NOT round-trip through NSString's file
+             * system representation, which would re-normalize Unicode to NFD and
+             * break matching against the NFC path cache (scripts use NFC). */
+            std::string p(path);
+            for (char &c : p)
+                if (c == '\\') c = '/';
+            while (p.compare(0, 2, "./") == 0)
+                p.erase(0, 2);
+            return p;
         }
 #endif
         NSString *nspath = [NSURL fileURLWithPath: PATHTONS(path)].URLByStandardizingPath.path;
