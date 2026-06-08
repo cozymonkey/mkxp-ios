@@ -112,25 +112,27 @@
 static MKXPTouchControls *g_touchControls = nil;
 
 extern "C" void mkxp_ios_initTouchControls(SDL_Window *win) {
-    @autoreleasepool {
-        SDL_SysWMinfo info;
-        SDL_VERSION(&info.version);
-        if (!SDL_GetWindowWMInfo(win, &info))
-            return;
+    /* SDL runs SDL_main (the engine's main) on a secondary thread on iOS, so this
+     * is NOT the UIKit main thread. All UIKit access — including reading the
+     * window/view from SDL — must happen on the main queue. */
+    dispatch_async(dispatch_get_main_queue(), ^{
+        @autoreleasepool {
+            SDL_SysWMinfo info;
+            SDL_VERSION(&info.version);
+            if (!SDL_GetWindowWMInfo(win, &info))
+                return;
 
-        UIWindow *uiwin = info.info.uikit.window;
-        UIView *root = uiwin.rootViewController.view ?: uiwin;
-        if (root == nil)
-            return;
+            UIWindow *uiwin = info.info.uikit.window;
+            UIView *root = uiwin.rootViewController.view ?: uiwin;
+            if (root == nil)
+                return;
 
-        if (g_touchControls == nil)
-            g_touchControls = [[MKXPTouchControls alloc] init];
+            if (g_touchControls == nil)
+                g_touchControls = [[MKXPTouchControls alloc] init];
 
-        /* Defer one runloop tick so SDL's view has been laid out at full size. */
-        dispatch_async(dispatch_get_main_queue(), ^{
             [g_touchControls attachTo:root];
-        });
-    }
+        }
+    });
 }
 
 #endif

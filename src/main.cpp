@@ -72,9 +72,13 @@ __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
 #include <TargetConditionals.h>
 #if !TARGET_OS_IPHONE
 #include "TouchBar.h"
-#endif
+// MKXPZ_INIT_GL_LATER creates the GL context on the RGSS thread. On iOS,
+// SDL_GL_CreateContext sets up the CAEAGLLayer (a UIKit op) and MUST run on the
+// main thread, so iOS keeps the early path (create on the main thread in main(),
+// the RGSS thread only makes it current).
 #if !defined(__MAC_10_15) || __MAC_OS_X_VERSION_MAX_ALLOWED < __MAC_10_15
 #define MKXPZ_INIT_GL_LATER
+#endif
 #endif
 #endif
 
