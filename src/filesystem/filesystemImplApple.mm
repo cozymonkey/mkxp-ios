@@ -56,6 +56,19 @@ std::string filesystemImpl::getCurrentDirectory() {
 
 std::string filesystemImpl::normalizePath(const char *path, bool preferred, bool absolute) {
     @autoreleasepool {
+#if TARGET_OS_IPHONE
+        /* PhysFS works with mount-relative paths. URLByStandardizingPath would
+         * absolutize the path, and because getcwd resolves the iOS /private
+         * symlink while standardizing does not, the cwd-prefix strip then fails
+         * and an absolute path leaks out that PhysFS can't match. For a relative
+         * input we just clean the separators and keep it relative. */
+        if (!absolute && path[0] != '/') {
+            NSString *p = [PATHTONS(path) stringByReplacingOccurrencesOfString:@"\\" withString:@"/"];
+            while ([p hasPrefix:@"./"])
+                p = [p substringFromIndex:2];
+            return std::string(NSTOPATH(p));
+        }
+#endif
         NSString *nspath = [NSURL fileURLWithPath: PATHTONS(path)].URLByStandardizingPath.path;
         NSString *pwd = [NSString stringWithFormat:@"%@/", NSFileManager.defaultManager.currentDirectoryPath];
         if (!absolute) {
