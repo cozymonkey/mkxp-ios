@@ -4,13 +4,15 @@
 # All the heavy lifting (build rules) lives in common.make; this file just sets
 # the platform knobs it consumes (PLATFORM/SYSROOT/VERSION_MIN_FLAG/...).
 #
-# PoC 1 scope: only `make openssl` and `make ruby` are expected to work here.
-# The cmake-based libs (sdl2, physfs, ...) still need iOS toolchain handling in
-# common.make and are out of scope for this file for now.
+# Targets that build & verify as iOS arm64: `make everything` (deps-core + ruby).
+# `make fluidsynth` (glib via meson + fluidsynth) is codified but must run in an
+# environment that can execute freshly-built native binaries (meson/fluidsynth run
+# build-time helper binaries) — i.e. a normal shell, not a locked-down agent sandbox.
 #
 # Requires full Xcode (not just Command Line Tools) so the iphoneos SDK exists:
 #   sudo xcode-select -s /Applications/Xcode.app
 #   xcrun --sdk iphoneos --show-sdk-path   # must print a path
+# Plus: brew install meson ninja  (for the fluidsynth/glib chain).
 
 ARCH := arm64
 PLATFORM := iphoneos
@@ -44,6 +46,13 @@ CMAKE_PLATFORM_ARGS = \
 	-DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=BOTH \
 	-DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=BOTH \
 	-DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=BOTH
+
+# meson cross-file for the glib build (fluidsynth chain). Generated at build time
+# because SYSROOT is machine-specific. needs_exe_wrapper=true is critical: build and
+# host triples are both aarch64/darwin, so without it meson tries to RUN iOS test
+# binaries on the host and hangs (same class as Ruby's build==host issue).
+# Recursive (=) so $(BUILD_PREFIX) (defined later in common.make) expands at use time.
+MESON_CROSS_FILE = $(BUILD_PREFIX)/ios-arm64.cross
 
 # ---------------------------------------------------------------------------
 # Ruby (the hard part). Build a shared libruby.3.1.dylib, matching mkxp-z's proven
@@ -82,3 +91,25 @@ RUBY_PATCH := \
 # "며칠 소요 가능" risk from CLAUDE.md — drive it from the actual error log.
 
 include common.make
+
+# Defined after the include so $(BUILD_PREFIX) (from common.make) is resolved in the
+# target. Generates the meson cross-file consumed by the glib build (see common.make).
+$(MESON_CROSS_FILE): | init_dirs
+	@printf '%s\n' \
+		'[binaries]' \
+		"c = ['clang', '-arch', '$(ARCH)', '-isysroot', '$(SYSROOT)']" \
+		"cpp = ['clang++', '-arch', '$(ARCH)', '-isysroot', '$(SYSROOT)']" \
+		"objc = ['clang', '-arch', '$(ARCH)', '-isysroot', '$(SYSROOT)']" \
+		"ar = 'ar'" "strip = 'strip'" "pkg-config = 'pkg-config'" \
+		'' '[properties]' 'needs_exe_wrapper = true' \
+		'' '[host_machine]' \
+		"system = 'darwin'" "subsystem = 'ios'" "kernel = 'xnu'" \
+		"cpu_family = 'aarch64'" "cpu = 'aarch64'" "endian = 'little'" \
+		'' '[built-in options]' \
+		"c_args = ['$(VERSION_MIN_FLAG)']" \
+		"cpp_args = ['$(VERSION_MIN_FLAG)']" \
+		"objc_args = ['$(VERSION_MIN_FLAG)']" \
+		"c_link_args = ['$(VERSION_MIN_FLAG)']" \
+		"cpp_link_args = ['$(VERSION_MIN_FLAG)']" \
+		> $@
+	@echo "Generated meson cross-file: $@"
