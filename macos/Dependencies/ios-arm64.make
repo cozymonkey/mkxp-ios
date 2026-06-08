@@ -90,6 +90,21 @@ RUBY_PATCH := \
 # `ac_cv_*=...` cache vars here until configure completes. This is the known
 # "며칠 소요 가능" risk from CLAUDE.md — drive it from the actual error log.
 
+# glib's gspawn.c includes <libproc.h>/<sys/proc_info.h> and calls proc_pidinfo()
+# under a bare __APPLE__ guard to enumerate fds before exec. The iOS SDK ships no
+# public libproc.h, and iOS can't exec child processes anyway (fluidsynth only uses
+# glib's data structures/threads). Gate both on !TARGET_OS_IPHONE so iOS falls through
+# to glib's generic fd-walk loop that immediately follows the proc_pidinfo block.
+GLIB_PATCH := \
+	perl -0pi -e 's|#ifdef __APPLE__\n#include <libproc\.h>\n#include <sys/proc_info\.h>|#ifdef __APPLE__\n#include <TargetConditionals.h>\n#if !TARGET_OS_IPHONE\n#include <libproc.h>\n#include <sys/proc_info.h>\n#endif|' $(DOWNLOADS)/glib/glib/gspawn.c && \
+	perl -0pi -e 's|#if defined\(__APPLE__\)\n  /\* proc_pidinfo|#if defined(__APPLE__) && !TARGET_OS_IPHONE\n  /* proc_pidinfo|' $(DOWNLOADS)/glib/glib/gspawn.c
+
+# fluidsynth's FindGLib2.cmake unconditionally appends AppKit + Carbon frameworks on
+# all Apple targets, but iOS has neither — the dylib link fails with "framework 'AppKit'
+# not found". Gate those two behind a non-iOS check (Foundation/CoreFoundation stay).
+FLUIDSYNTH_PATCH := \
+	perl -0pi -e 's|    list\(APPEND _glib2_link_libraries "-Wl,-framework,Foundation"\n         "-Wl,-framework,CoreFoundation" "-Wl,-framework,AppKit"\n         "-Wl,-framework,Carbon"\)|    list(APPEND _glib2_link_libraries "-Wl,-framework,Foundation"\n         "-Wl,-framework,CoreFoundation")\n    if(NOT CMAKE_SYSTEM_NAME STREQUAL "iOS")\n      list(APPEND _glib2_link_libraries "-Wl,-framework,AppKit"\n           "-Wl,-framework,Carbon")\n    endif()|' $(DOWNLOADS)/fluidsynth/cmake_admin/FindGLib2.cmake
+
 include common.make
 
 # Defined after the include so $(BUILD_PREFIX) (from common.make) is resolved in the

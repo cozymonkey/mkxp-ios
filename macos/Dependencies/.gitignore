@@ -1,4 +1,5 @@
 build-*/
 downloads/
 *.lock.json
-*.dmg
+*.dmg__pycache__/
+*.pyc
