@@ -26,6 +26,25 @@ DEPLOYMENT_TARGET_ENV := IPHONEOS_DEPLOYMENT_TARGET=$(MINIMUM_REQUIRED)
 # `ios64-cross` and export CROSS_COMPILE/CROSS_TOP instead.
 OPENSSL_FLAGS := ios64-xcrun
 
+# Vendored libjxl can't cross-build for iOS (builds host CLI tools); game uses PNG/JPG.
+IMG_JXL := no
+
+# cmake cross-compile to iOS: CMAKE_SYSTEM_NAME=iOS flips cmake into cross mode
+# (skips run-time probes, picks the iphoneos toolchain). Pin the sysroot explicitly.
+# In cross mode find_package() only searches the sysroot by default, so point
+# CMAKE_FIND_ROOT_PATH at our prefix and allow searching it (BOTH) for the libs
+# we build (libogg, freetype, ...) instead of only the SDK.
+# Recursive (=) so $(BUILD_PREFIX), defined later in common.make, expands at use time.
+CMAKE_PLATFORM_ARGS = \
+	-DCMAKE_SYSTEM_NAME=iOS \
+	-DCMAKE_SYSTEM_PROCESSOR=arm64 \
+	-DCMAKE_OSX_SYSROOT=$(SYSROOT) \
+	-DCMAKE_FIND_ROOT_PATH=$(BUILD_PREFIX) \
+	-DCMAKE_FIND_ROOT_PATH_MODE_LIBRARY=BOTH \
+	-DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=BOTH \
+	-DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=BOTH \
+	-DCMAKE_FIND_ROOT_PATH_MODE_PROGRAM=BOTH
+
 # ---------------------------------------------------------------------------
 # Ruby (the hard part). Build a shared libruby.3.1.dylib, matching mkxp-z's proven
 # macOS configuration (the engine links @rpath/libruby.3.1.dylib). A static-only

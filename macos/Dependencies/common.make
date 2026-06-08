@@ -44,13 +44,22 @@ CONFIGURE_ARGS := \
 	--prefix="$(BUILD_PREFIX)" \
 	--host=$(HOST)
 
+# Platform-specific cmake args. Empty on macOS (native build); iOS sets
+# -DCMAKE_SYSTEM_NAME=iOS + the iphoneos sysroot so cmake cross-compiles.
+CMAKE_PLATFORM_ARGS ?=
+
+# SDL_image JPEG XL support. On by default; iOS turns it off because vendored
+# libjxl builds host tools that can't install for iOS (and the game uses PNG/JPG).
+IMG_JXL ?= yes
+
 CMAKE_ARGS := \
 	-DCMAKE_INSTALL_PREFIX="$(BUILD_PREFIX)" \
 	-DCMAKE_PREFIX_PATH="$(BUILD_PREFIX)" \
 	-DCMAKE_OSX_ARCHITECTURES=$(ARCH) \
 	-DCMAKE_OSX_DEPLOYMENT_TARGET=$(MINIMUM_REQUIRED) \
 	-DCMAKE_C_FLAGS="$(CFLAGS)" \
-	-DCMAKE_BUILD_TYPE=Release
+	-DCMAKE_BUILD_TYPE=Release \
+	$(CMAKE_PLATFORM_ARGS)
 
 
 # Ruby won't think it's cross-compiling unless
@@ -147,7 +156,7 @@ $(LIBDIR)/libuchardet.a: $(DOWNLOADS)/uchardet/cmakebuild/Makefile
 $(DOWNLOADS)/uchardet/cmakebuild/Makefile: $(DOWNLOADS)/uchardet/CMakeLists.txt
 	cd $(DOWNLOADS)/uchardet; \
 	mkdir cmakebuild; cd cmakebuild; \
-	$(CMAKE) -DBUILD_SHARED_LIBS=no
+	$(CMAKE) -DBUILD_SHARED_LIBS=no -DBUILD_BINARY=OFF
 
 $(DOWNLOADS)/uchardet/CMakeLists.txt:
 	$(CLONE) https://gitlab.freedesktop.org/uchardet/uchardet -b v0.0.8 $(DOWNLOADS)/uchardet
@@ -181,7 +190,7 @@ $(LIBDIR)/libphysfs.a: $(DOWNLOADS)/physfs/cmakebuild/Makefile
 $(DOWNLOADS)/physfs/cmakebuild/Makefile: $(DOWNLOADS)/physfs/CMakeLists.txt
 	cd $(DOWNLOADS)/physfs; \
 	mkdir cmakebuild; cd cmakebuild; \
-	$(CMAKE) -DPHYSFS_BUILD_STATIC=true -DPHYSFS_BUILD_SHARED=false
+	$(CMAKE) -DPHYSFS_BUILD_STATIC=true -DPHYSFS_BUILD_SHARED=false -DPHYSFS_BUILD_TEST=false
 
 $(DOWNLOADS)/physfs/CMakeLists.txt:
 	$(CLONE) $(GITHUB)/icculus/physfs -b release-3.2.0 $(DOWNLOADS)/physfs
@@ -231,7 +240,7 @@ $(DOWNLOADS)/sdl2_image/cmakebuild/Makefile: $(DOWNLOADS)/sdl2_image/CMakeLists.
 	-DSDL2IMAGE_PNG_SAVE=yes \
 	-DSDL2IMAGE_PNG_SHARED=no \
 	-DSDL2IMAGE_JPG_SHARED=no \
-	-DSDL2IMAGE_JXL=yes \
+	-DSDL2IMAGE_JXL=$(IMG_JXL) \
 	-DSDL2IMAGE_JXL_SHARED=no \
 	-DSDL2IMAGE_BACKEND_IMAGEIO=no \
 	-DSDL2IMAGE_VENDORED=yes
