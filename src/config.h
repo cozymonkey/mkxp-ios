@@ -70,6 +70,7 @@ struct Config {
     
     bool subImageFix;
     bool enableBlitting;
+    bool verifyAssets;
     int maxTextureSize;
     
     struct {

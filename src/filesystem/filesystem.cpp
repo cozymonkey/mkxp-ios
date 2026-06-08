@@ -32,6 +32,7 @@
 #include "sharedstate.h"
 
 #include <physfs.h>
+#include <SDL_image.h>
 
 #include <algorithm>
 #include <stack>
@@ -458,6 +459,96 @@ void FileSystem::createPathCache() {
   p->havePathCache = true;
 
   Debug() << "Path cache completed.";
+}
+
+/* --- Asset integrity checker (config "verifyAssets") ----------------------- */
+
+struct VerifyHandler : FileSystem::OpenHandler {
+  bool ok = false;
+  std::string err;
+  bool tryRead(SDL_RWops &ops, const char *ext) {
+    /* freesrc=1: IMG closes ops on both success and failure. */
+    SDL_Surface *s = IMG_LoadTyped_RW(&ops, 1, ext);
+    if (s) { ok = true; SDL_FreeSurface(s); return true; }
+    err = IMG_GetError();
+    return false;
+  }
+};
+
+static bool hasImageExt(const char *name) {
+  const char *dot = strrchr(name, '.');
+  if (!dot) return false;
+  std::string e(dot + 1);
+  for (char &c : e) c = tolower(c);
+  static const char *exts[] = {"png", "jpg", "jpeg", "bmp", "gif", "webp"};
+  for (const char *x : exts) if (e == x) return true;
+  return false;
+}
+
+#ifdef __APPLE__
+/* Apple enumerates filenames in NFD; the game references them in NFC (scripts).
+ * Normalize so the scan tests the same names the game uses. */
+static std::string toNFCString(const std::string &in) {
+  iconv_t cd = iconv_open("utf-8", "utf-8-mac");
+  if (cd == (iconv_t)-1) return in;
+  std::string out(in.size() * 2 + 4, '\0');
+  char *src = const_cast<char *>(in.data());
+  size_t srcLeft = in.size();
+  char *dst = &out[0];
+  size_t dstLeft = out.size();
+  if (iconv(cd, &src, &srcLeft, &dst, &dstLeft) == (size_t)-1) {
+    iconv_close(cd);
+    return in;
+  }
+  iconv_close(cd);
+  out.resize(out.size() - dstLeft);
+  return out;
+}
+#endif
+
+static void collectImages(const std::string &dir, std::vector<std::string> &out) {
+  char **list = PHYSFS_enumerateFiles(dir.c_str());
+  if (!list) return;
+  for (char **f = list; *f; ++f) {
+    std::string full = dir.empty() ? *f : dir + "/" + *f;
+    PHYSFS_Stat st;
+    if (PHYSFS_stat(full.c_str(), &st) && st.filetype == PHYSFS_FILETYPE_DIRECTORY)
+      collectImages(full, out);
+    else if (hasImageExt(*f))
+      out.push_back(full);
+  }
+  PHYSFS_freeList(list);
+}
+
+void FileSystem::verifyImageAssets() {
+  Debug() << "[verify] scanning Graphics/ for unloadable images...";
+  std::vector<std::string> imgs;
+  collectImages("Graphics", imgs);
+
+  int failed = 0;
+  for (const std::string &path : imgs) {
+    /* Strip the extension so we hit the same path the game uses (it references
+     * graphics by base name, exercising the extension-supplement + path cache). */
+    std::string base = path;
+    size_t dot = base.find_last_of('.');
+    if (dot != std::string::npos) base.resize(dot);
+#ifdef __APPLE__
+    base = toNFCString(base);
+#endif
+
+    VerifyHandler h;
+    try {
+      openRead(h, base.c_str());
+    } catch (const Exception &e) {
+      h.err = e.msg;
+    }
+    if (!h.ok) {
+      Debug() << "[verify] FAIL:" << path << "-"
+              << (h.err.empty() ? "no decodable match" : h.err);
+      ++failed;
+    }
+  }
+  Debug() << "[verify] done:" << (int)imgs.size() << "images checked," << failed << "failed";
 }
 
 void FileSystem::reloadPathCache() {

@@ -44,7 +44,12 @@ public:
 
 	/* Call these after the last 'addPath()' */
 	void createPathCache();
-    
+
+	/* Dev tool: walk Graphics/ and try to load every image the way the game does
+	 * (extension stripped, through the path cache), logging each failure plus a
+	 * summary. Enabled by the "verifyAssets" config option. */
+	void verifyImageAssets();
+
     void reloadPathCache();
 
 	/* Scans "Fonts/" and creates inventory of

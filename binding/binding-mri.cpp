@@ -953,6 +953,10 @@ bool evalScript(VALUE string, const char *filename)
 
 static void runRMXPScripts(BacktraceData &btData) {
     const Config &conf = shState->rtData().config;
+
+    if (conf.verifyAssets)
+        shState->fileSystem().verifyImageAssets();
+
     const std::string &scriptPack = conf.game.scripts;
     
     if (scriptPack.empty()) {

@@ -185,6 +185,7 @@ void Config::read(int argc, char *argv[]) {
         {"BGMTrackCount", 1},
         {"customScript", ""},
         {"pathCache", true},
+        {"verifyAssets", false},
         {"useScriptNames", true},
         {"preloadScript", json::array({})},
         {"postloadScript", json::array({})},
@@ -250,6 +251,7 @@ try { exp } catch (...) {}
     SET_STRINGOPT(execName, execName);
     SET_OPT(allowSymlinks, boolean);
     SET_OPT(pathCache, boolean);
+    SET_OPT(verifyAssets, boolean);
     SET_OPT_CUSTOMKEY(jit.enabled, JITEnable, boolean);
     SET_OPT_CUSTOMKEY(jit.verboseLevel, JITVerboseLevel, integer);
     SET_OPT_CUSTOMKEY(jit.maxCache, JITMaxCache, integer);
