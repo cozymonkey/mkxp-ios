@@ -18,6 +18,9 @@
 #import "filesystemImpl.h"
 #import "util/exception.h"
 
+#include <string>
+#include <vector>
+
 #define PATHTONS(str) [NSFileManager.defaultManager stringWithFileSystemRepresentation:str length:strlen(str)]
 
 #define NSTOPATH(str) [NSFileManager.defaultManager fileSystemRepresentationWithPath:str]
@@ -63,15 +66,39 @@ std::string filesystemImpl::normalizePath(const char *path, bool preferred, bool
          * and an absolute path leaks out that PhysFS can't match. For a relative
          * input we just clean the separators and keep it relative. */
         if (!absolute && path[0] != '/') {
-            /* Pure byte-level cleanup — do NOT round-trip through NSString's file
-             * system representation, which would re-normalize Unicode to NFD and
-             * break matching against the NFC path cache (scripts use NFC). */
-            std::string p(path);
-            for (char &c : p)
+            /* Pure byte-level normalization — do NOT round-trip through NSString's
+             * file system representation, which would re-normalize Unicode to NFD
+             * and break matching against the NFC path cache (scripts use NFC).
+             * We still must resolve "." and ".." components (e.g. the engine builds
+             * paths like "Audio/BGM/../../Audio/BGM/foo"), otherwise PhysFS can't
+             * find the file. */
+            std::string in(path);
+            for (char &c : in)
                 if (c == '\\') c = '/';
-            while (p.compare(0, 2, "./") == 0)
-                p.erase(0, 2);
-            return p;
+
+            std::vector<std::string> comps;
+            size_t start = 0;
+            while (start <= in.size()) {
+                size_t slash = in.find('/', start);
+                size_t len = (slash == std::string::npos) ? std::string::npos : slash - start;
+                std::string comp = in.substr(start, len);
+                if (comp == "..") {
+                    if (!comps.empty() && comps.back() != "..")
+                        comps.pop_back();
+                    /* else: at/above root — drop it (can't go above the mount) */
+                } else if (comp != "." && !comp.empty()) {
+                    comps.push_back(comp);
+                }
+                if (slash == std::string::npos) break;
+                start = slash + 1;
+            }
+
+            std::string out;
+            for (size_t i = 0; i < comps.size(); ++i) {
+                if (i) out += '/';
+                out += comps[i];
+            }
+            return out;
         }
 #endif
         NSString *nspath = [NSURL fileURLWithPath: PATHTONS(path)].URLByStandardizingPath.path;
