@@ -44,7 +44,7 @@
     UIButton *b = [UIButton buttonWithType:UIButtonTypeCustom];
     b.tag = sc;
     [b setTitle:title forState:UIControlStateNormal];
-    b.titleLabel.font = [UIFont boldSystemFontOfSize:22];
+    b.titleLabel.font = [UIFont boldSystemFontOfSize:26];
     [b setTitleColor:[UIColor colorWithWhite:1.0 alpha:0.9] forState:UIControlStateNormal];
     b.backgroundColor = [UIColor colorWithWhite:0.0 alpha:0.28];
     b.layer.cornerRadius = 8.0;
@@ -66,6 +66,15 @@
     EventThread::keyStates[b.tag] = 0;
 }
 
+- (UIButton *)button:(NSString *)title scancode:(int)sc
+               frame:(CGRect)frame mask:(UIViewAutoresizing)mask {
+    UIButton *b = [self makeButton:title scancode:sc];
+    b.frame = frame;
+    b.autoresizingMask = mask;
+    [self.overlay addSubview:b];
+    return b;
+}
+
 - (void)attachTo:(UIView *)parent {
     CGRect bounds = parent.bounds;
     MKXPTouchOverlay *ov = [[MKXPTouchOverlay alloc] initWithFrame:bounds];
@@ -73,36 +82,40 @@
     ov.backgroundColor = [UIColor clearColor];
     self.overlay = ov;
 
-    const CGFloat S = 56;   // button size
-    const CGFloat G = 6;    // gap
-    const CGFloat M = 24;   // margin from screen edges
-    CGFloat W = bounds.size.width;
-    CGFloat H = bounds.size.height;
+    const CGFloat S = 62;   // button size
+    const CGFloat G = 8;    // gap
+    const CGFloat M = 18;   // margin from screen edges
+    const CGFloat W = bounds.size.width;
+    const CGFloat H = bounds.size.height;
 
-    /* D-pad (plus shape), bottom-left. Anchor on a center cross. */
-    CGFloat cx = M + S + G + S / 2;            // center x of the cross
-    CGFloat cy = H - M - S - G - S / 2;        // center y of the cross
-    UIButton *up    = [self makeButton:@"▲" scancode:SDL_SCANCODE_UP];
-    UIButton *down  = [self makeButton:@"▼" scancode:SDL_SCANCODE_DOWN];
-    UIButton *left  = [self makeButton:@"◀" scancode:SDL_SCANCODE_LEFT];
-    UIButton *right = [self makeButton:@"▶" scancode:SDL_SCANCODE_RIGHT];
-    up.frame    = CGRectMake(cx - S/2, cy - S/2 - (S+G), S, S);
-    down.frame  = CGRectMake(cx - S/2, cy - S/2 + (S+G), S, S);
-    left.frame  = CGRectMake(cx - S/2 - (S+G), cy - S/2, S, S);
-    right.frame = CGRectMake(cx - S/2 + (S+G), cy - S/2, S, S);
-    up.autoresizingMask = down.autoresizingMask = left.autoresizingMask =
-        right.autoresizingMask = UIViewAutoresizingFlexibleTopMargin | UIViewAutoresizingFlexibleRightMargin;
+    const UIViewAutoresizing BL = UIViewAutoresizingFlexibleTopMargin | UIViewAutoresizingFlexibleRightMargin;  // bottom-left
+    const UIViewAutoresizing BR = UIViewAutoresizingFlexibleTopMargin | UIViewAutoresizingFlexibleLeftMargin;   // bottom-right
+    const UIViewAutoresizing TL = UIViewAutoresizingFlexibleBottomMargin | UIViewAutoresizingFlexibleRightMargin; // top-left
+    const UIViewAutoresizing TR = UIViewAutoresizingFlexibleBottomMargin | UIViewAutoresizingFlexibleLeftMargin;  // top-right
 
-    /* A (Use/Return) + B (Back-Menu/X), bottom-right. */
-    UIButton *a = [self makeButton:@"A" scancode:SDL_SCANCODE_RETURN];
-    UIButton *b = [self makeButton:@"B" scancode:SDL_SCANCODE_X];
-    a.frame = CGRectMake(W - M - S, H - M - S - (S/2), S, S);          // lower
-    b.frame = CGRectMake(W - M - S - (S+G) - (S/2), H - M - S, S, S);  // left of A
-    a.autoresizingMask = b.autoresizingMask =
-        UIViewAutoresizingFlexibleTopMargin | UIViewAutoresizingFlexibleLeftMargin;
+    /* D-pad (plus), bottom-left. Mapping: arrow keys. */
+    CGFloat cx = M + S + G + S / 2;
+    CGFloat cy = H - M - S - G - S / 2;
+    [self button:@"▲" scancode:SDL_SCANCODE_UP    frame:CGRectMake(cx - S/2,         cy - S/2 - (S+G), S, S) mask:BL];
+    [self button:@"▼" scancode:SDL_SCANCODE_DOWN  frame:CGRectMake(cx - S/2,         cy - S/2 + (S+G), S, S) mask:BL];
+    [self button:@"◀" scancode:SDL_SCANCODE_LEFT  frame:CGRectMake(cx - S/2 - (S+G), cy - S/2,         S, S) mask:BL];
+    [self button:@"▶" scancode:SDL_SCANCODE_RIGHT frame:CGRectMake(cx - S/2 + (S+G), cy - S/2,         S, S) mask:BL];
 
-    for (UIButton *btn in @[up, down, left, right, a, b])
-        [ov addSubview:btn];
+    /* Face buttons, bottom-right 2x2.
+     * A=Use(C), B=Back(X), Z=Bag(Z), 특수=Special(D). */
+    CGFloat rcx = W - M - S;            // right column x
+    CGFloat lcx = W - M - S - (S+G);    // left column x
+    CGFloat brY = H - M - S;            // bottom row y
+    CGFloat trY = H - M - S - (S+G);    // top row y
+    [self button:@"A"  scancode:SDL_SCANCODE_C frame:CGRectMake(rcx, brY, S, S) mask:BR];
+    [self button:@"B"  scancode:SDL_SCANCODE_X frame:CGRectMake(lcx, brY, S, S) mask:BR];
+    [self button:@"Z"  scancode:SDL_SCANCODE_Z frame:CGRectMake(rcx, trY, S, S) mask:BR];
+    [self button:@"특" scancode:SDL_SCANCODE_D frame:CGRectMake(lcx, trY, S, S) mask:BR];  // 특수
+
+    /* Shoulders + speed, top. L=A, R=S, 배속=Q. */
+    [self button:@"L"  scancode:SDL_SCANCODE_A frame:CGRectMake(M,                 M, S, S) mask:TL];
+    [self button:@"R"  scancode:SDL_SCANCODE_S frame:CGRectMake(W - M - S,         M, S, S) mask:TR];
+    [self button:@"배" scancode:SDL_SCANCODE_Q frame:CGRectMake(W - M - S - (S+G), M, S, S) mask:TR];  // 배속
 
     [parent addSubview:ov];
 }
