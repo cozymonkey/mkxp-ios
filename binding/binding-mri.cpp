@@ -1134,6 +1134,30 @@ static void showExc(VALUE exc, const BacktraceData &btData) {
 #else
     RSTRING_PTR(rb_ary_entry(bt, i)));
 #endif
+
+#if RAPI_MAJOR >= 2
+    /* Follow the exception's cause chain. Wrappers like Essentials'
+     * EventScriptError carry the real error (NoMethodError, missing file, ...)
+     * in #cause; without this only the useless wrapper name is shown. */
+    VALUE causeMsg = Qnil;
+    {
+        VALUE cause = rb_funcall2(exc, rb_intern("cause"), 0, NULL);
+        int depth = 0;
+        while (RTEST(cause) && depth++ < 8) {
+            VALUE cname = rb_class_path(rb_obj_class(cause));
+            VALUE cmsg = rb_funcall2(cause, rb_intern("message"), 0, NULL);
+            if (NIL_P(causeMsg))
+                causeMsg = rb_sprintf("%" PRIsVALUE ": %" PRIsVALUE, cname, cmsg);
+            rb_str_catf(ds, "\n  caused by %" PRIsVALUE ": %" PRIsVALUE, cname, cmsg);
+            VALUE cbt = rb_funcall2(cause, rb_intern("backtrace"), 0, NULL);
+            if (RTEST(cbt))
+                for (long i = 0, btlen = RARRAY_LEN(cbt); i < btlen && i < 12; ++i)
+                    rb_str_catf(ds, "\n\tfrom %" PRIsVALUE, rb_ary_entry(cbt, i));
+            cause = rb_funcall2(cause, rb_intern("cause"), 0, NULL);
+        }
+    }
+#endif
+
     Debug() << StringValueCStr(ds);
     
     char *s = RSTRING_PTR(bt0);
@@ -1174,10 +1198,16 @@ static void showExc(VALUE exc, const BacktraceData &btData) {
     file.resize(strlen(file.c_str()));
     file = btData.scriptNames.value(file, file);
     
-    std::string ms(640, '\0');
-    snprintf(&ms[0], ms.size(), "Script '%s' line %s: %s occurred.\n\n%s",
-             file.c_str(), line, RSTRING_PTR(name), RSTRING_PTR(msg));
-    
+    std::string ms(1024, '\0');
+#if RAPI_MAJOR >= 2
+    if (!NIL_P(causeMsg))
+        snprintf(&ms[0], ms.size(), "Script '%s' line %s: %s occurred.\n\n%s\n\nCaused by:\n%s",
+                 file.c_str(), line, RSTRING_PTR(name), RSTRING_PTR(msg), RSTRING_PTR(causeMsg));
+    else
+#endif
+        snprintf(&ms[0], ms.size(), "Script '%s' line %s: %s occurred.\n\n%s",
+                 file.c_str(), line, RSTRING_PTR(name), RSTRING_PTR(msg));
+
     showMsg(ms);
 }
 
