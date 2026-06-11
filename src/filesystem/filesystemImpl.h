@@ -30,6 +30,12 @@ std::string contentsOfAssetAsString(const char *baseName, const char *ext);
 
 std::string getResourcePath();
 
+/* iOS only: a writable save directory under the app's Documents folder (so it's
+ * reachable via Files.app / Finder for PC<->iOS save sharing). Creates it and,
+ * on first use, migrates any existing saves from the old Application Support
+ * location. Returns the path (no trailing slash). */
+std::string getDocumentsSavePath(const char *appName);
+
 std::string selectPath(SDL_Window *win, const char *msg, const char *prompt);
 #endif
 

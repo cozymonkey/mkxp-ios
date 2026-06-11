@@ -7,6 +7,9 @@
 
 #include "config.h"
 #include <SDL_filesystem.h>
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#endif
 #include <assert.h>
 
 #include <stdint.h>
@@ -441,7 +444,14 @@ void Config::readGameINI() {
     if (dataPathApp.empty())
         dataPathApp = game.title;
     
+#if defined(__APPLE__) && TARGET_OS_IPHONE
+    /* Put saves under the app's Documents folder (file-sharing visible) so they
+     * can be swapped with the PC version. dataPathApp matches the PC save folder
+     * name, so the formats line up. */
+    customDataPath = mkxp_fs::getDocumentsSavePath(dataPathApp.c_str());
+#else
     customDataPath = mkxp_fs::normalizePath(prefPath(dataPathOrg.c_str(), dataPathApp.c_str()).c_str(), 0, 1);
+#endif
     
     if (rgssVersion == 0) {
         /* Try to guess RGSS version based on Data/Scripts extension */

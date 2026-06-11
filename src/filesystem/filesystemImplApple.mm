@@ -201,6 +201,36 @@ std::string filesystemImpl::getResourcePath() {
     }
 }
 
+std::string filesystemImpl::getDocumentsSavePath(const char *appName) {
+    @autoreleasepool {
+        NSFileManager *fm = NSFileManager.defaultManager;
+        NSString *app = [NSString stringWithUTF8String:appName];
+        NSString *docs = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
+        NSString *dest = [docs stringByAppendingPathComponent:app];
+
+        BOOL existed = [fm fileExistsAtPath:dest];
+        if (!existed)
+            [fm createDirectoryAtPath:dest withIntermediateDirectories:YES attributes:nil error:nil];
+
+        /* First run with the new path: migrate saves from the old Application
+         * Support location so the player doesn't lose progress. */
+        if (!existed) {
+            NSString *appSup = NSSearchPathForDirectoriesInDomains(NSApplicationSupportDirectory, NSUserDomainMask, YES).firstObject;
+            NSString *old = [appSup stringByAppendingPathComponent:app];
+            BOOL isDir = NO;
+            if ([fm fileExistsAtPath:old isDirectory:&isDir] && isDir) {
+                for (NSString *item in [fm contentsOfDirectoryAtPath:old error:nil]) {
+                    NSString *src = [old stringByAppendingPathComponent:item];
+                    NSString *dst = [dest stringByAppendingPathComponent:item];
+                    if (![fm fileExistsAtPath:dst])
+                        [fm copyItemAtPath:src toPath:dst error:nil];
+                }
+            }
+        }
+        return std::string(NSTOPATH(dest));
+    }
+}
+
 std::string filesystemImpl::selectPath(SDL_Window *win, const char *msg, const char *prompt) {
 #if TARGET_OS_IPHONE
     /* No folder picker on iOS; the game always runs from Documents/game. */
