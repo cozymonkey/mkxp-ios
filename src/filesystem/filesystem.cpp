@@ -26,6 +26,7 @@
 #include "util/exception.h"
 #include "util/util.h"
 #include "display/font.h"
+#include "display/gl/glstate.h"
 #include "crypto/rgssad.h"
 
 #include "eventthread.h"
@@ -465,11 +466,12 @@ void FileSystem::createPathCache() {
 
 struct VerifyHandler : FileSystem::OpenHandler {
   bool ok = false;
+  int w = 0, h = 0;
   std::string err;
   bool tryRead(SDL_RWops &ops, const char *ext) {
     /* freesrc=1: IMG closes ops on both success and failure. */
     SDL_Surface *s = IMG_LoadTyped_RW(&ops, 1, ext);
-    if (s) { ok = true; SDL_FreeSurface(s); return true; }
+    if (s) { ok = true; w = s->w; h = s->h; SDL_FreeSurface(s); return true; }
     err = IMG_GetError();
     return false;
   }
@@ -521,11 +523,12 @@ static void collectImages(const std::string &dir, std::vector<std::string> &out)
 }
 
 void FileSystem::verifyImageAssets() {
-  Debug() << "[verify] scanning Graphics/ for unloadable images...";
+  const int maxTex = glState.caps.maxTexSize;
+  Debug() << "[verify] scanning Graphics/ (maxTexSize =" << maxTex << ")...";
   std::vector<std::string> imgs;
   collectImages("Graphics", imgs);
 
-  int failed = 0;
+  int failed = 0, oversized = 0;
   for (const std::string &path : imgs) {
     /* Strip the extension so we hit the same path the game uses (it references
      * graphics by base name, exercising the extension-supplement + path cache). */
@@ -546,9 +549,17 @@ void FileSystem::verifyImageAssets() {
       Debug() << "[verify] FAIL:" << path << "-"
               << (h.err.empty() ? "no decodable match" : h.err);
       ++failed;
+    } else if (h.w > maxTex || h.h > maxTex) {
+      /* Decodes fine, but is bigger than one GL texture on this platform, so it
+       * becomes a mega surface. Now handled for Sprites, but flag it: other
+       * draw paths (Plane/Window/blt) may still reject it. */
+      Debug() << "[verify] OVERSIZED:" << path << "-" << h.w << "x" << h.h
+              << "(> maxTexSize" << maxTex << ", mega surface)";
+      ++oversized;
     }
   }
-  Debug() << "[verify] done:" << (int)imgs.size() << "images checked," << failed << "failed";
+  Debug() << "[verify] done:" << (int)imgs.size() << "images checked,"
+          << failed << "failed," << oversized << "oversized";
 }
 
 void FileSystem::reloadPathCache() {
