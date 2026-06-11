@@ -63,7 +63,11 @@ struct SpritePrivate
     Rect *srcRect;
     FloatRect adjustedSrcRect;
     sigslot::connection srcRectCon;
-    
+
+    /* For mega-surface bitmaps (too big for one GL texture on this platform):
+     * the visible src region, uploaded to a small texture at draw time. */
+    IntRect megaSrcRect;
+
     bool mirrored;
     int bushDepth;
     float efBushDepth;
@@ -298,7 +302,15 @@ struct SpritePrivate
         rect.w = clamp<int>(rect.w, 0, bmSize.x-rect.x);
         rect.h = clamp<int>(rect.h, 0, bmSize.y-rect.y);
         
-        if (bmSizeHires.x && bmSizeHires.y && bmSize.x && bmSize.y)
+        if (!nullOrDisposed(bitmap) && bitmap->isMega())
+        {
+            /* The mega surface is uploaded per-frame as a small texture holding
+             * exactly this region at origin (0,0), so use local tex coords. */
+            megaSrcRect = IntRect(rect.x, rect.y, rect.w, rect.h);
+            FloatRect local(0, 0, rect.w, rect.h);
+            quad.setTexRect(mirrored ? local.hFlipped() : local);
+        }
+        else if (bmSizeHires.x && bmSizeHires.y && bmSize.x && bmSize.y)
         {
             FloatRect rectHires(rect.x * bmSizeHires.x / bmSize.x,
                                 rect.y * bmSizeHires.y / bmSize.y,
@@ -310,7 +322,7 @@ struct SpritePrivate
         {
             quad.setTexRect(mirrored ? rect.hFlipped() : rect);
         }
-        
+
         quad.setPosRect(FloatRect(0, 0, rect.w, rect.h));
         bushDirty = true;
         
@@ -587,9 +599,10 @@ void Sprite::setBitmap(Bitmap *bitmap)
     }
     
     p->bitmapDispCon = bitmap->wasDisposed.connect(&SpritePrivate::bitmapDisposal, p);
-    
-    bitmap->ensureNonMega();
-    
+
+    /* Mega-surface bitmaps are now supported (drawn region-by-region); only
+     * animated bitmaps remain unsupported here. */
+
     *p->srcRect = bitmap->rect();
     p->onSrcRectChange();
     p->quad.setPosRect(p->srcRect->toFloatRect());
@@ -976,8 +989,11 @@ void Sprite::draw()
     }
     
     glState.blendMode.pushSet(p->blendType);
-    
-    p->bitmap->bindTex(*base, false);
+
+    if (p->bitmap->isMega())
+        p->bitmap->bindTexMega(*base, p->megaSrcRect);
+    else
+        p->bitmap->bindTex(*base, false);
 
 #ifdef MKXPZ_SSL
     if (scalingMethod == xBRZ)

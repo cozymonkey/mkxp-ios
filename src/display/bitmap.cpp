@@ -63,7 +63,8 @@ extern "C" {
 { \
 if (p->megaSurface) \
 throw Exception(Exception::MKXPError, \
-"Operation not supported for mega surfaces"); \
+"Operation not supported for mega surfaces (%s, %dx%d)", \
+__func__, p->megaSurface->w, p->megaSurface->h); \
 }
 
 #define GUARD_ANIMATED \
@@ -224,6 +225,12 @@ struct BitmapPrivate
      * kept in RAM and will throw an error if they're used in
      * any context other than as Tilesets */
     SDL_Surface *megaSurface;
+
+    /* For displaying a mega surface in a Sprite/Plane/Window on platforms with a
+     * small GL_MAX_TEXTURE_SIZE (e.g. iOS = 4096): a small GPU texture holding
+     * just the currently-visible src region, refreshed when that region moves. */
+    TEXFBO megaTex;
+    IntRect megaTexSrc;
     
     /* A cached version of the bitmap in client memory, for
      * getPixel calls. Is invalidated any time the bitmap
@@ -247,6 +254,7 @@ struct BitmapPrivate
     BitmapPrivate(Bitmap *self)
     : self(self),
     megaSurface(0),
+    megaTexSrc(0, 0, 0, 0),
     selfHires(0),
     selfLores(0),
     surface(0),
@@ -275,6 +283,46 @@ struct BitmapPrivate
         prepareCon.disconnect();
         SDL_FreeFormat(format);
         pixman_region_fini(&tainted);
+        if (megaTex.tex.gl)
+            TEXFBO::fini(megaTex);
+    }
+
+    /* Upload the given region of the mega surface into megaTex and bind it.
+     * src is in mega-surface coordinates; the bound texture holds exactly that
+     * region at origin (0,0), so the caller must use local tex coords. */
+    void bindMegaTexture(ShaderBase &shader, IntRect src)
+    {
+        const int maxSz = glState.caps.maxTexSize;
+        src.w = clamp(src.w, 1, std::min(megaSurface->w, maxSz));
+        src.h = clamp(src.h, 1, std::min(megaSurface->h, maxSz));
+        src.x = clamp(src.x, 0, megaSurface->w - src.w);
+        src.y = clamp(src.y, 0, megaSurface->h - src.h);
+
+        if (megaTex.tex.gl == 0 || megaTex.width != src.w || megaTex.height != src.h)
+        {
+            if (megaTex.tex.gl)
+                TEXFBO::fini(megaTex);
+            TEXFBO::init(megaTex);
+            TEXFBO::allocEmpty(megaTex, src.w, src.h);
+            megaTexSrc = IntRect(-1, -1, -1, -1); /* force refresh */
+        }
+
+        if (megaTexSrc != src)
+        {
+            SDL_Surface *sub = SDL_CreateRGBSurface(0, src.w, src.h, format->BitsPerPixel,
+                                                    format->Rmask, format->Gmask,
+                                                    format->Bmask, format->Amask);
+            SDL_Rect sr = { src.x, src.y, src.w, src.h };
+            SDL_SetSurfaceBlendMode(megaSurface, SDL_BLENDMODE_NONE);
+            SDL_BlitSurface(megaSurface, &sr, sub, 0);
+            TEX::bind(megaTex.tex);
+            TEX::uploadSubImage(0, 0, src.w, src.h, sub->pixels, GL_RGBA);
+            SDL_FreeSurface(sub);
+            megaTexSrc = src;
+        }
+
+        TEX::bind(megaTex.tex);
+        shader.setTexSize(Vec2i(src.w, src.h));
     }
     
     TEXFBO &getGLTypes() {
@@ -3271,6 +3319,11 @@ void Bitmap::bindTex(ShaderBase &shader, bool substituteLoresSize)
     // Hires mode is handled by p->bindTexture.
 
     p->bindTexture(shader, substituteLoresSize);
+}
+
+void Bitmap::bindTexMega(ShaderBase &shader, const IntRect &src)
+{
+    p->bindMegaTexture(shader, src);
 }
 
 void Bitmap::taintArea(const IntRect &rect)

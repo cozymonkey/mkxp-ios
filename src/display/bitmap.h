@@ -134,6 +134,10 @@ public:
     SDL_Surface *surface() const;
 	SDL_Surface *megaSurface() const;
 	void ensureNonMega() const;
+
+	/* iOS / small-max-texture support: display a mega surface by uploading only
+	 * the visible src region to a small texture. */
+	void bindTexMega(ShaderBase &shader, const IntRect &src);
     void ensureNonAnimated() const;
     void ensureAnimated() const;
     
